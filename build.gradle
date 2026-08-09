@@ -227,12 +227,20 @@ tasks.register('servoStateTest', JavaExec) {
     mainClass = 'io.github.garfieldcoder.luxworks.servo.ServoStateTest'
 }
 
+tasks.register('angularShadowMaskTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs the dependency-free angular shadow mask tests.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'io.github.garfieldcoder.luxworks.light.AngularShadowMaskTest'
+}
+
 tasks.named('test', Test).configure {
     failOnNoDiscoveredTests = false
 }
 
 tasks.named('check').configure {
-    dependsOn lightStateTest, servoStateTest
+    dependsOn lightStateTest, servoStateTest, angularShadowMaskTest
 }
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.

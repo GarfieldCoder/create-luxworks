@@ -10,6 +10,7 @@ import io.github.garfieldcoder.luxworks.light.StaticLightTransformResolver;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 
@@ -21,6 +22,10 @@ public final class SableLightTransformResolver {
     private static final StaticLightTransformResolver STATIC_RESOLVER = new StaticLightTransformResolver();
 
     private SableLightTransformResolver() {
+    }
+
+    public static boolean isInSubLevel(Level level, BlockPos blockPos) {
+        return SableCompanion.INSTANCE.getContaining(level, blockPos) != null;
     }
 
     public static LightTransform resolve(

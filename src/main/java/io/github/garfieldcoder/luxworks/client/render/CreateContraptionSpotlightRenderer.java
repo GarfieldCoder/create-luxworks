@@ -4,9 +4,11 @@ import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
 import com.simibubi.create.content.contraptions.behaviour.MovementContext;
 import io.github.garfieldcoder.luxworks.Luxworks;
 import io.github.garfieldcoder.luxworks.compat.veil.VeilDebugBeamRenderer;
+import io.github.garfieldcoder.luxworks.compat.veil.VeilAreaLightManager;
 import io.github.garfieldcoder.luxworks.content.block.DebugLightBlock;
 import io.github.garfieldcoder.luxworks.content.blockentity.SpotlightBlockEntity;
 import io.github.garfieldcoder.luxworks.light.LightState;
+import io.github.garfieldcoder.luxworks.light.LightTransform;
 import io.github.garfieldcoder.luxworks.registry.LuxworksBlocks;
 import io.github.garfieldcoder.luxworks.servo.ServoDirectionResolver;
 import io.github.garfieldcoder.luxworks.servo.ServoState;
@@ -17,6 +19,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import org.joml.Quaternionf;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,6 +31,13 @@ public final class CreateContraptionSpotlightRenderer {
     private static final String LIGHT_STATE_TAG = "light_state";
     private static final String SERVO_STATE_TAG = "servo_state";
     private static final UUID FALLBACK_ID = new UUID(0L, 0L);
+    /**
+     * Veil's deferred area-light pass currently exposes missing/interior faces on
+     * Flywheel-rendered Create contraptions. Keep it available for focused
+     * diagnostics, but never enable the incompatible path by default.
+     */
+    private static final boolean ENABLE_EXPERIMENTAL_CREATE_SURFACE_LIGHT =
+            Boolean.getBoolean("luxworks.experimentalCreateSurfaceLights");
     private static final Map<CacheKey, CachedOcclusion> OCCLUSION_CACHE = new HashMap<>();
 
     private CreateContraptionSpotlightRenderer() {
@@ -77,6 +87,7 @@ public final class CreateContraptionSpotlightRenderer {
                 ? SpotlightBlockEntity.readState(data.getCompound(LIGHT_STATE_TAG), FALLBACK_ID)
                 : LightState.defaults(FALLBACK_ID);
         if (!light.enabled() || light.intensity() <= 0.0F || light.range() <= 0.0F) {
+            VeilAreaLightManager.remove(light.id());
             return;
         }
         ServoState servo = data.contains(SERVO_STATE_TAG, CompoundTag.TAG_COMPOUND)
@@ -91,6 +102,23 @@ public final class CreateContraptionSpotlightRenderer {
         Vec3 previousPosition = entity.toGlobalVector(localPosition, partialTick, true);
         Vec3 currentPosition = entity.toGlobalVector(localPosition, partialTick, false);
         Vec3 worldPosition = previousPosition.lerp(currentPosition, partialTick);
+        if (ENABLE_EXPERIMENTAL_CREATE_SURFACE_LIGHT) {
+            Quaternionf worldRotation = new Quaternionf().rotationTo(
+                    0.0F,
+                    0.0F,
+                    1.0F,
+                    (float) worldForward.x,
+                    (float) worldForward.y,
+                    (float) worldForward.z
+            );
+            VeilAreaLightManager.update(
+                    new LightTransform(worldPosition, worldRotation, worldForward),
+                    light,
+                    gameTime
+            );
+        } else {
+            VeilAreaLightManager.remove(light.id());
+        }
         Vec3 rayStart = worldPosition.add(worldForward.scale(0.60));
         double range = Math.min(light.range(), 64.0);
 

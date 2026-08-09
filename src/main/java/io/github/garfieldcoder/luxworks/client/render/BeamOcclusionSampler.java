@@ -2,6 +2,7 @@ package io.github.garfieldcoder.luxworks.client.render;
 
 import io.github.garfieldcoder.luxworks.content.block.DebugLightBlock;
 import io.github.garfieldcoder.luxworks.content.blockentity.SpotlightBlockEntity;
+import io.github.garfieldcoder.luxworks.compat.create.CreateLightOcclusionResolver;
 import io.github.garfieldcoder.luxworks.servo.ServoDirectionResolver;
 import io.github.garfieldcoder.luxworks.servo.ServoState;
 import io.github.garfieldcoder.luxworks.compat.sable.SableLightRayResolver;
@@ -12,7 +13,7 @@ import net.minecraft.world.phys.Vec3;
 /** Coarse CPU light-space visibility sampler for the Phase 1 prototype. */
 public final class BeamOcclusionSampler {
     public static final int SEGMENTS = 16;
-    public static final double[] RING_FRACTIONS = {0.35, 1.0};
+    public static final double[] RING_FRACTIONS = {0.0, 0.2, 0.5, 0.75, 1.0};
     private static final double START_OFFSET = 0.60;
 
     private BeamOcclusionSampler() {
@@ -44,9 +45,26 @@ public final class BeamOcclusionSampler {
                 localStart
         );
         double coneSlope = Math.tan(Math.toRadians(outerAngleDegrees * 0.5));
+        float partialTick = Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false);
 
         for (int ring = 0; ring < RING_FRACTIONS.length; ring++) {
             double radialSlope = coneSlope * RING_FRACTIONS[ring];
+            if (radialSlope == 0.0) {
+                Vec3 direction = SableLightRayResolver.resolveDirection(
+                        spotlight.getLevel(),
+                        spotlight.getBlockPos(),
+                        forward
+                );
+                Vec3 end = start.add(direction.scale(range));
+                double hitDistance = SableLightOcclusionResolver.clipDistance(
+                        spotlight.getLevel(), start, end, Minecraft.getInstance().player
+                );
+                hitDistance = Math.min(hitDistance, CreateLightOcclusionResolver.clipDistance(
+                        spotlight.getLevel(), start, end, Minecraft.getInstance().player, partialTick
+                ));
+                java.util.Arrays.fill(distances[ring], Math.max(0.0, hitDistance - 0.03));
+                continue;
+            }
             for (int segment = 0; segment < SEGMENTS; segment++) {
                 double angle = Math.PI * 2.0 * segment / SEGMENTS;
                 Vec3 localDirection = forward
@@ -64,6 +82,13 @@ public final class BeamOcclusionSampler {
                         start.add(direction.scale(range)),
                         Minecraft.getInstance().player
                 );
+                hitDistance = Math.min(hitDistance, CreateLightOcclusionResolver.clipDistance(
+                        spotlight.getLevel(),
+                        start,
+                        start.add(direction.scale(range)),
+                        Minecraft.getInstance().player,
+                        partialTick
+                ));
                 distances[ring][segment] = Math.max(0.0, hitDistance - 0.03);
             }
         }
@@ -87,9 +112,21 @@ public final class BeamOcclusionSampler {
         Vec3 right = reference.cross(forward).normalize();
         Vec3 up = forward.cross(right).normalize();
         double coneSlope = Math.tan(Math.toRadians(outerAngleDegrees * 0.5));
+        float partialTick = Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false);
 
         for (int ring = 0; ring < RING_FRACTIONS.length; ring++) {
             double radialSlope = coneSlope * RING_FRACTIONS[ring];
+            if (radialSlope == 0.0) {
+                Vec3 end = start.add(forward.scale(range));
+                double hitDistance = SableLightOcclusionResolver.clipDistance(
+                        level, start, end, Minecraft.getInstance().player
+                );
+                hitDistance = Math.min(hitDistance, CreateLightOcclusionResolver.clipDistance(
+                        level, start, end, Minecraft.getInstance().player, partialTick
+                ));
+                java.util.Arrays.fill(distances[ring], Math.max(0.0, hitDistance - 0.03));
+                continue;
+            }
             for (int segment = 0; segment < SEGMENTS; segment++) {
                 double angle = Math.PI * 2.0 * segment / SEGMENTS;
                 Vec3 direction = forward
@@ -102,6 +139,13 @@ public final class BeamOcclusionSampler {
                         start.add(direction.scale(range)),
                         Minecraft.getInstance().player
                 );
+                hitDistance = Math.min(hitDistance, CreateLightOcclusionResolver.clipDistance(
+                        level,
+                        start,
+                        start.add(direction.scale(range)),
+                        Minecraft.getInstance().player,
+                        partialTick
+                ));
                 distances[ring][segment] = Math.max(0.0, hitDistance - 0.03);
             }
         }

@@ -6,6 +6,7 @@ import foundry.veil.api.client.render.rendertype.VeilRenderType;
 import io.github.garfieldcoder.luxworks.Luxworks;
 import io.github.garfieldcoder.luxworks.light.LightTransform;
 import io.github.garfieldcoder.luxworks.light.LightState;
+import io.github.garfieldcoder.luxworks.light.AngularShadowMask;
 import io.github.garfieldcoder.luxworks.client.render.BeamOcclusionProfile;
 import io.github.garfieldcoder.luxworks.client.render.BeamOcclusionSampler;
 import net.minecraft.client.Minecraft;
@@ -15,14 +16,16 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Minimal Phase 0 Veil volume. This is intentionally not the final beam
- * renderer: it has no shadows, depth clipping, surface light, or atmosphere.
+ * Phase 1 Veil volume driven by a coarse CPU angular occlusion mask. This is
+ * intentionally not the final beam renderer: it has no receiver-aware surface
+ * lighting, scene-depth integration, filtered penumbra, or atmosphere.
  */
 public final class VeilDebugBeamRenderer {
     private static final ResourceLocation RENDER_TYPE_ID =
             ResourceLocation.fromNamespaceAndPath(Luxworks.MOD_ID, "debug_beam");
     private static final int SEGMENTS = BeamOcclusionSampler.SEGMENTS;
-    public static final int VERTEX_COUNT = SEGMENTS * 3 * BeamOcclusionSampler.RING_FRACTIONS.length;
+    public static final int VERTEX_COUNT = SEGMENTS * 3
+            + (BeamOcclusionSampler.RING_FRACTIONS.length - 1) * SEGMENTS * 6;
     private static final double START_OFFSET = 0.52;
     private static final double MAX_PROTOTYPE_RANGE = 64.0;
 
@@ -93,20 +96,49 @@ public final class VeilDebugBeamRenderer {
         }
 
         double range = Math.min(lightState.range(), MAX_PROTOTYPE_RANGE);
+        AngularShadowMask shadowMask = occlusion.toShadowMask(range);
         Vec3 start = new Vec3(0.0, 0.0, 0.40);
         VertexConsumer vertices = buffers.getBuffer(renderType);
         PoseStack.Pose pose = poseStack.last();
         double coneSlope = Math.tan(Math.toRadians(lightState.outerAngleDegrees() * 0.5));
 
-        for (int ring = 0; ring < BeamOcclusionSampler.RING_FRACTIONS.length; ring++) {
+        int outerRing = BeamOcclusionSampler.RING_FRACTIONS.length - 1;
+        double outerSlope = coneSlope * BeamOcclusionSampler.RING_FRACTIONS[outerRing];
+        for (int segment = 0; segment < SEGMENTS; segment++) {
+            int next = (segment + 1) % SEGMENTS;
+            Vec3 edgeA = clippedLocalEndpoint(
+                    start, outerSlope, segment, shadowMask.value(outerRing, segment) * range
+            );
+            Vec3 edgeB = clippedLocalEndpoint(
+                    start, outerSlope, next, shadowMask.value(outerRing, next) * range
+            );
+            addVertex(vertices, pose, start, lightState, 55);
+            addVertex(vertices, pose, edgeA, lightState, 3);
+            addVertex(vertices, pose, edgeB, lightState, 3);
+        }
+        for (int ring = 1; ring < BeamOcclusionSampler.RING_FRACTIONS.length; ring++) {
+            double innerSlope = coneSlope * BeamOcclusionSampler.RING_FRACTIONS[ring - 1];
             double radialSlope = coneSlope * BeamOcclusionSampler.RING_FRACTIONS[ring];
             for (int segment = 0; segment < SEGMENTS; segment++) {
                 int next = (segment + 1) % SEGMENTS;
-                Vec3 edgeA = clippedLocalEndpoint(start, radialSlope, segment, occlusion.distance(ring, segment));
-                Vec3 edgeB = clippedLocalEndpoint(start, radialSlope, next, occlusion.distance(ring, next));
-                addVertex(vertices, pose, start, lightState, 55);
-                addVertex(vertices, pose, edgeA, lightState, 3);
-                addVertex(vertices, pose, edgeB, lightState, 3);
+                Vec3 innerA = clippedLocalEndpoint(
+                        start, innerSlope, segment, shadowMask.value(ring - 1, segment) * range
+                );
+                Vec3 innerB = clippedLocalEndpoint(
+                        start, innerSlope, next, shadowMask.value(ring - 1, next) * range
+                );
+                Vec3 outerA = clippedLocalEndpoint(
+                        start, radialSlope, segment, shadowMask.value(ring, segment) * range
+                );
+                Vec3 outerB = clippedLocalEndpoint(
+                        start, radialSlope, next, shadowMask.value(ring, next) * range
+                );
+                addVertex(vertices, pose, innerA, lightState, 3);
+                addVertex(vertices, pose, outerA, lightState, 3);
+                addVertex(vertices, pose, outerB, lightState, 3);
+                addVertex(vertices, pose, innerA, lightState, 3);
+                addVertex(vertices, pose, outerB, lightState, 3);
+                addVertex(vertices, pose, innerB, lightState, 3);
             }
         }
         return true;
@@ -135,20 +167,56 @@ public final class VeilDebugBeamRenderer {
         Vec3 right = reference.cross(forward).normalize();
         Vec3 up = forward.cross(right).normalize();
         Vec3 start = worldPosition.add(forward.scale(0.40)).subtract(cameraPosition);
+        double range = Math.min(lightState.range(), MAX_PROTOTYPE_RANGE);
+        AngularShadowMask shadowMask = occlusion.toShadowMask(range);
         double coneSlope = Math.tan(Math.toRadians(lightState.outerAngleDegrees() * 0.5));
 
         MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();
         VertexConsumer vertices = buffers.getBuffer(renderType);
         PoseStack.Pose pose = poseStack.last();
-        for (int ring = 0; ring < BeamOcclusionSampler.RING_FRACTIONS.length; ring++) {
+        int outerRing = BeamOcclusionSampler.RING_FRACTIONS.length - 1;
+        double outerSlope = coneSlope * BeamOcclusionSampler.RING_FRACTIONS[outerRing];
+        for (int segment = 0; segment < SEGMENTS; segment++) {
+            int next = (segment + 1) % SEGMENTS;
+            Vec3 edgeA = worldEndpoint(
+                    start, forward, right, up, outerSlope, segment,
+                    shadowMask.value(outerRing, segment) * range
+            );
+            Vec3 edgeB = worldEndpoint(
+                    start, forward, right, up, outerSlope, next,
+                    shadowMask.value(outerRing, next) * range
+            );
+            addVertex(vertices, pose, start, lightState, 55);
+            addVertex(vertices, pose, edgeA, lightState, 3);
+            addVertex(vertices, pose, edgeB, lightState, 3);
+        }
+        for (int ring = 1; ring < BeamOcclusionSampler.RING_FRACTIONS.length; ring++) {
+            double innerSlope = coneSlope * BeamOcclusionSampler.RING_FRACTIONS[ring - 1];
             double radialSlope = coneSlope * BeamOcclusionSampler.RING_FRACTIONS[ring];
             for (int segment = 0; segment < SEGMENTS; segment++) {
                 int next = (segment + 1) % SEGMENTS;
-                Vec3 edgeA = worldEndpoint(start, forward, right, up, radialSlope, segment, occlusion.distance(ring, segment));
-                Vec3 edgeB = worldEndpoint(start, forward, right, up, radialSlope, next, occlusion.distance(ring, next));
-                addVertex(vertices, pose, start, lightState, 55);
-                addVertex(vertices, pose, edgeA, lightState, 3);
-                addVertex(vertices, pose, edgeB, lightState, 3);
+                Vec3 innerA = worldEndpoint(
+                        start, forward, right, up, innerSlope, segment,
+                        shadowMask.value(ring - 1, segment) * range
+                );
+                Vec3 innerB = worldEndpoint(
+                        start, forward, right, up, innerSlope, next,
+                        shadowMask.value(ring - 1, next) * range
+                );
+                Vec3 outerA = worldEndpoint(
+                        start, forward, right, up, radialSlope, segment,
+                        shadowMask.value(ring, segment) * range
+                );
+                Vec3 outerB = worldEndpoint(
+                        start, forward, right, up, radialSlope, next,
+                        shadowMask.value(ring, next) * range
+                );
+                addVertex(vertices, pose, innerA, lightState, 3);
+                addVertex(vertices, pose, outerA, lightState, 3);
+                addVertex(vertices, pose, outerB, lightState, 3);
+                addVertex(vertices, pose, innerA, lightState, 3);
+                addVertex(vertices, pose, outerB, lightState, 3);
+                addVertex(vertices, pose, innerB, lightState, 3);
             }
         }
         buffers.endBatch(renderType);
