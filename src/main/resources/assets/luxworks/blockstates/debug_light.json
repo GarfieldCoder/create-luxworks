@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "luxworks:block/debug_light" },
+    "facing=east": { "model": "luxworks:block/debug_light", "y": 90 },
+    "facing=south": { "model": "luxworks:block/debug_light", "y": 180 },
+    "facing=west": { "model": "luxworks:block/debug_light", "y": 270 }
+  }
+}

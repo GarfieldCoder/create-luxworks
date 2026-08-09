@@ -28,7 +28,24 @@ sourceSets.main.resources {
 }
 
 repositories {
-    // Add here additional repositories if required by some of the dependencies below.
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Modrinth'
+                url = 'https://api.modrinth.com/maven'
+            }
+        }
+        filter {
+            includeGroup 'maven.modrinth'
+        }
+    }
+    maven {
+        name = 'RyanHCode Releases'
+        url = 'https://maven.ryanhcode.dev/releases'
+        content {
+            includeGroup 'dev.ryanhcode.sable-companion'
+        }
+    }
 }
 
 base {
@@ -116,12 +133,17 @@ configurations {
 }
 
 dependencies {
-    // Example optional mod dependency with JEI
-    // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
-    // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
-    // compileOnly "mezz.jei:jei-${mc_version}-neoforge-api:${jei_version}"
-    // We add the full version to localRuntime, not runtimeOnly, so that we do not publish a dependency on it
-    // localRuntime "mezz.jei:jei-${mc_version}-neoforge:${jei_version}"
+    // Phase 0 uses the exact public distribution JARs. Create bundles its
+    // rendering libraries; Sable bundles Sable Companion and Veil; the
+    // Aeronautics distribution bundles Simulated, Aeronautics, and Offroad.
+    implementation "maven.modrinth:LNytGWDc:${create_modrinth_version_id}"
+    implementation "maven.modrinth:T9PomCSv:${sable_modrinth_version_id}"
+    implementation "maven.modrinth:oWaK0Q19:${aeronautics_modrinth_version_id}"
+    compileOnly "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
+
+    // JEI is optional for players but present in development for recipe and
+    // Create integration testing. Ponder itself is supplied by Create.
+    localRuntime "maven.modrinth:u6dRKJwZ:${jei_modrinth_version_id}"
 
     // Example mod dependency using a mod jar from ./libs with a flat dir repository
     // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
@@ -151,6 +173,9 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_name               : mod_name,
             mod_license            : mod_license,
             mod_version            : mod_version,
+            create_version         : create_version,
+            sable_version          : sable_version,
+            aeronautics_version    : aeronautics_version,
     ]
     inputs.properties replaceProperties
     expand replaceProperties
