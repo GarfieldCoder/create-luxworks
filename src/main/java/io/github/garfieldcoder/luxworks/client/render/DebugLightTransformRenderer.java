@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.garfieldcoder.luxworks.Luxworks;
 import io.github.garfieldcoder.luxworks.compat.sable.SableLightTransformResolver;
+import io.github.garfieldcoder.luxworks.compat.veil.VeilDebugBeamRenderer;
 import io.github.garfieldcoder.luxworks.content.block.DebugLightBlock;
 import io.github.garfieldcoder.luxworks.light.LightTransform;
 import io.github.garfieldcoder.luxworks.registry.LuxworksBlocks;
@@ -47,6 +48,7 @@ public final class DebugLightTransformRenderer {
             return;
         }
 
+        long startedAt = System.nanoTime();
         Direction facing = blockState.getValue(DebugLightBlock.FACING);
         LightTransform transform = SableLightTransformResolver.resolve(
                 minecraft.level,
@@ -54,7 +56,17 @@ public final class DebugLightTransformRenderer {
                 facing,
                 event.getPartialTick().getGameTimeDeltaPartialTick(false)
         );
+        boolean beamRendered = VeilDebugBeamRenderer.render(
+                event.getPoseStack(),
+                transform,
+                event.getCamera().getPosition()
+        );
         drawDirectionLine(event, transform);
+        LightRenderMetrics.record(
+                System.nanoTime() - startedAt,
+                beamRendered ? 1 : 0,
+                beamRendered ? VeilDebugBeamRenderer.VERTEX_COUNT : 0
+        );
     }
 
     private static void drawDirectionLine(RenderLevelStageEvent event, LightTransform transform) {
