@@ -5,6 +5,7 @@ import com.mojang.math.Axis;
 import io.github.garfieldcoder.luxworks.content.block.DebugLightBlock;
 import io.github.garfieldcoder.luxworks.content.blockentity.SpotlightBlockEntity;
 import io.github.garfieldcoder.luxworks.compat.veil.VeilDebugBeamRenderer;
+import io.github.garfieldcoder.luxworks.compat.create.CreateCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -14,12 +15,14 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import io.github.garfieldcoder.luxworks.Luxworks;
 import io.github.garfieldcoder.luxworks.registry.LuxworksBlockEntities;
+import java.util.WeakHashMap;
 
 /**
  * Temporary articulated fixture built from ordinary block-model cuboids.
@@ -31,6 +34,7 @@ import io.github.garfieldcoder.luxworks.registry.LuxworksBlockEntities;
 @EventBusSubscriber(modid = Luxworks.MOD_ID, value = Dist.CLIENT)
 public final class SpotlightBlockEntityRenderer implements BlockEntityRenderer<SpotlightBlockEntity> {
     private final Minecraft minecraft = Minecraft.getInstance();
+    private final WeakHashMap<SpotlightBlockEntity, CachedOcclusion> occlusionCache = new WeakHashMap<>();
 
     public SpotlightBlockEntityRenderer(BlockEntityRendererProvider.Context context) {
     }
@@ -38,6 +42,28 @@ public final class SpotlightBlockEntityRenderer implements BlockEntityRenderer<S
     @SubscribeEvent
     public static void register(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(LuxworksBlockEntities.SPOTLIGHT.get(), SpotlightBlockEntityRenderer::new);
+    }
+
+    @Override
+    public boolean shouldRenderOffScreen(SpotlightBlockEntity spotlight) {
+        // The bounded fixture can leave the camera frustum while its long beam
+        // still crosses the view. A dedicated light manager will replace this
+        // broad prototype policy with cone/frustum culling and light budgets.
+        return true;
+    }
+
+    @Override
+    public AABB getRenderBoundingBox(SpotlightBlockEntity spotlight) {
+        // NeoForge culls block entities by this box before the vanilla
+        // shouldRenderOffScreen hook. The prototype has no central light
+        // manager yet, so keep loaded fixtures eligible while testing beams
+        // that can cross the camera view from an off-screen emitter.
+        return AABB.INFINITE;
+    }
+
+    @Override
+    public int getViewDistance() {
+        return 256;
     }
 
     @Override
@@ -53,6 +79,7 @@ public final class SpotlightBlockEntityRenderer implements BlockEntityRenderer<S
         Direction facing = spotlight.getBlockState().getValue(DebugLightBlock.FACING);
         var servo = spotlight.getInterpolatedServoState(partialTick);
         var lightState = spotlight.getLightState();
+        BeamOcclusionProfile occlusion = resolveOcclusion(spotlight, servo, lightState.range(), lightState.outerAngleDegrees());
 
         poseStack.pushPose();
         poseStack.translate(0.5, 0.25, 0.5);
@@ -76,10 +103,11 @@ public final class SpotlightBlockEntityRenderer implements BlockEntityRenderer<S
                 0.0F, 0.0F, -0.28F, 0.46F, 0.46F, 0.08F, packedLight);
         renderCuboid(poseStack, buffers, Blocks.SEA_LANTERN.defaultBlockState(),
                 0.0F, 0.0F, 0.34F, 0.34F, 0.34F, 0.06F, LightTexture.FULL_BRIGHT);
-        boolean beamRendered = lightState.enabled()
+        boolean beamRendered = !CreateCompat.isVirtualContraptionLevel(spotlight.getLevel())
+                && lightState.enabled()
                 && lightState.intensity() > 0.0F
                 && lightState.range() > 0.0F
-                && VeilDebugBeamRenderer.renderLocal(poseStack, buffers, lightState);
+                && VeilDebugBeamRenderer.renderLocal(poseStack, buffers, lightState, occlusion);
         poseStack.popPose();
 
         LightRenderMetrics.record(
@@ -116,5 +144,26 @@ public final class SpotlightBlockEntityRenderer implements BlockEntityRenderer<S
 
     private static float yawForFacing(Direction facing) {
         return (float) Math.atan2(facing.getStepX(), facing.getStepZ());
+    }
+
+    private BeamOcclusionProfile resolveOcclusion(
+            SpotlightBlockEntity spotlight,
+            io.github.garfieldcoder.luxworks.servo.ServoState servo,
+            double range,
+            double outerAngleDegrees
+    ) {
+        long gameTime = spotlight.getLevel() == null ? 0L : spotlight.getLevel().getGameTime();
+        CachedOcclusion cached = occlusionCache.get(spotlight);
+        if (cached == null || gameTime - cached.sampledAtTick >= 5L) {
+            cached = new CachedOcclusion(
+                    gameTime,
+                    BeamOcclusionSampler.sample(spotlight, servo, Math.min(range, 64.0), outerAngleDegrees)
+            );
+            occlusionCache.put(spotlight, cached);
+        }
+        return cached.profile;
+    }
+
+    private record CachedOcclusion(long sampledAtTick, BeamOcclusionProfile profile) {
     }
 }

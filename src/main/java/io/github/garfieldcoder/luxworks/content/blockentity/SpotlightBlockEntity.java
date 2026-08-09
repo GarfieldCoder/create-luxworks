@@ -160,7 +160,7 @@ public final class SpotlightBlockEntity extends BlockEntity {
         return tag;
     }
 
-    private static LightState readState(CompoundTag tag, UUID fallbackId) {
+    public static LightState readState(CompoundTag tag, UUID fallbackId) {
         LightState defaults = LightState.defaults(fallbackId);
         return new LightState(
                 tag.hasUUID(ID_TAG) ? tag.getUUID(ID_TAG) : fallbackId,
@@ -183,7 +183,7 @@ public final class SpotlightBlockEntity extends BlockEntity {
         return tag;
     }
 
-    private static ServoState readServoState(CompoundTag tag) {
+    public static ServoState readServoState(CompoundTag tag) {
         ServoState defaults = ServoState.defaults();
         return new ServoState(
                 tag.contains(CURRENT_YAW_TAG) ? tag.getFloat(CURRENT_YAW_TAG) : defaults.currentYaw(),
