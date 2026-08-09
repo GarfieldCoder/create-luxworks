@@ -1,9 +1,15 @@
 package io.github.garfieldcoder.luxworks.client.render;
 
+import io.github.garfieldcoder.luxworks.light.AngularShadowMask;
+
 /** Cached light-ray distances for concentric angular samples of a cone. */
 public record BeamOcclusionProfile(double[][] distances) {
     public double distance(int ring, int segment) {
         return distances[ring][segment];
+    }
+
+    public AngularShadowMask toShadowMask(double range) {
+        return AngularShadowMask.fromDistances(BeamOcclusionSampler.RING_FRACTIONS, distances, range);
     }
 
     public static BeamOcclusionProfile interpolate(

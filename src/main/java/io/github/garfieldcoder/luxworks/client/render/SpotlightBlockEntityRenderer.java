@@ -6,7 +6,10 @@ import io.github.garfieldcoder.luxworks.content.block.DebugLightBlock;
 import io.github.garfieldcoder.luxworks.content.blockentity.SpotlightBlockEntity;
 import io.github.garfieldcoder.luxworks.compat.veil.VeilDebugBeamRenderer;
 import io.github.garfieldcoder.luxworks.compat.create.CreateCompat;
+import io.github.garfieldcoder.luxworks.compat.sable.SableLightTransformResolver;
+import io.github.garfieldcoder.luxworks.compat.veil.VeilAreaLightManager;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
@@ -79,6 +82,21 @@ public final class SpotlightBlockEntityRenderer implements BlockEntityRenderer<S
         Direction facing = spotlight.getBlockState().getValue(DebugLightBlock.FACING);
         var servo = spotlight.getInterpolatedServoState(partialTick);
         var lightState = spotlight.getLightState();
+        if (spotlight.getLevel() instanceof ClientLevel clientLevel
+                && !CreateCompat.isVirtualContraptionLevel(clientLevel)
+                && lightState.enabled()
+                && lightState.intensity() > 0.0F) {
+            var localForward = io.github.garfieldcoder.luxworks.servo.ServoDirectionResolver.resolve(facing, servo);
+            var transform = SableLightTransformResolver.resolve(
+                    clientLevel,
+                    spotlight.getBlockPos(),
+                    localForward,
+                    partialTick
+            );
+            VeilAreaLightManager.update(transform, lightState, spotlight.getLevel().getGameTime());
+        } else {
+            VeilAreaLightManager.remove(lightState.id());
+        }
         BeamOcclusionProfile occlusion = resolveOcclusion(spotlight, servo, lightState.range(), lightState.outerAngleDegrees());
 
         poseStack.pushPose();
