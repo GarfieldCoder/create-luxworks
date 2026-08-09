@@ -1,3 +1,19 @@
 {
-  "block.luxworks.debug_light": "Debug Light"
+  "block.luxworks.debug_light": "Debug Light",
+  "message.luxworks.aim_set": "Spotlight aimed at your position",
+  "screen.luxworks.spotlight_controls": "Spotlight Servo Controls",
+  "screen.luxworks.yaw": "Yaw",
+  "screen.luxworks.pitch": "Pitch",
+  "screen.luxworks.apply": "Apply",
+  "screen.luxworks.invalid_angle": "Enter valid numeric angles"
+  ,"item.luxworks.debug_targeting_stick": "Debug Targeting Stick"
+  ,"message.luxworks.targeting_stick_bound": "Bound spotlight at %s"
+  ,"message.luxworks.targeting_stick_unbound": "Click a spotlight first"
+  ,"message.luxworks.targeting_stick_missing": "The bound spotlight is unavailable"
+  ,"message.luxworks.targeting_stick_target": "Saved target at %s"
+  ,"screen.luxworks.reset": "Reset"
+  ,"screen.luxworks.clear_target": "Clear Target"
+  ,"screen.luxworks.angle_limits": "Yaw wraps at ±180°  •  Pitch clamps at ±90°"
+  ,"screen.luxworks.saved_target": "Target: %s, %s, %s"
+  ,"screen.luxworks.no_saved_target": "Target: none (manual angle mode)"
 }

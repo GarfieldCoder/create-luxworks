@@ -2,6 +2,7 @@ package io.github.garfieldcoder.luxworks.registry;
 
 import io.github.garfieldcoder.luxworks.Luxworks;
 import io.github.garfieldcoder.luxworks.content.block.DebugLightBlock;
+import io.github.garfieldcoder.luxworks.content.item.DebugTargetingStickItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.SoundType;
@@ -18,13 +19,22 @@ public final class LuxworksBlocks {
     public static final DeferredBlock<DebugLightBlock> DEBUG_LIGHT = BLOCKS.registerBlock(
             "debug_light",
             DebugLightBlock::new,
-            BlockBehaviour.Properties.of().strength(1.5F).sound(SoundType.METAL)
+            BlockBehaviour.Properties.of()
+                    .strength(1.5F)
+                    .sound(SoundType.METAL)
+                    .noOcclusion()
     );
 
     public static final DeferredItem<BlockItem> DEBUG_LIGHT_ITEM = ITEMS.registerSimpleBlockItem(
             "debug_light",
             DEBUG_LIGHT,
             new Item.Properties()
+    );
+
+    public static final DeferredItem<DebugTargetingStickItem> DEBUG_TARGETING_STICK = ITEMS.registerItem(
+            "debug_targeting_stick",
+            DebugTargetingStickItem::new,
+            new Item.Properties().stacksTo(1)
     );
 
     private LuxworksBlocks() {

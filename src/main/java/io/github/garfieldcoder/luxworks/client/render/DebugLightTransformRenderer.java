@@ -4,10 +4,13 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.garfieldcoder.luxworks.Luxworks;
 import io.github.garfieldcoder.luxworks.compat.sable.SableLightTransformResolver;
-import io.github.garfieldcoder.luxworks.compat.veil.VeilDebugBeamRenderer;
 import io.github.garfieldcoder.luxworks.content.block.DebugLightBlock;
+import io.github.garfieldcoder.luxworks.content.blockentity.SpotlightBlockEntity;
+import io.github.garfieldcoder.luxworks.light.LightState;
 import io.github.garfieldcoder.luxworks.light.LightTransform;
 import io.github.garfieldcoder.luxworks.registry.LuxworksBlocks;
+import io.github.garfieldcoder.luxworks.servo.ServoDirectionResolver;
+import io.github.garfieldcoder.luxworks.servo.ServoState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -20,6 +23,8 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+
+import java.util.UUID;
 
 /**
  * Phase 0 visualization for the resolved transform of the targeted debug light.
@@ -48,25 +53,39 @@ public final class DebugLightTransformRenderer {
             return;
         }
 
-        long startedAt = System.nanoTime();
         Direction facing = blockState.getValue(DebugLightBlock.FACING);
+        LightState lightState = resolveLightState(minecraft, blockPos);
+        if (!lightState.enabled() || lightState.intensity() <= 0.0F || lightState.range() <= 0.0F) {
+            return;
+        }
+        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
+        ServoState servoState = resolveServoState(minecraft, blockPos, partialTick);
+        Vec3 localForward = ServoDirectionResolver.resolve(facing, servoState);
         LightTransform transform = SableLightTransformResolver.resolve(
                 minecraft.level,
                 blockPos,
-                facing,
-                event.getPartialTick().getGameTimeDeltaPartialTick(false)
-        );
-        boolean beamRendered = VeilDebugBeamRenderer.render(
-                event.getPoseStack(),
-                transform,
-                event.getCamera().getPosition()
+                localForward,
+                partialTick
         );
         drawDirectionLine(event, transform);
-        LightRenderMetrics.record(
-                System.nanoTime() - startedAt,
-                beamRendered ? 1 : 0,
-                beamRendered ? VeilDebugBeamRenderer.VERTEX_COUNT : 0
-        );
+    }
+
+    private static LightState resolveLightState(Minecraft minecraft, BlockPos blockPos) {
+        if (minecraft.level.getBlockEntity(blockPos) instanceof SpotlightBlockEntity spotlight) {
+            return spotlight.getLightState();
+        }
+
+        // Existing Phase 0 worlds may contain debug lights created before the
+        // block gained a block entity. Keep those fixtures visible until they
+        // are replaced and receive persistent state.
+        return LightState.defaults(new UUID(0L, blockPos.asLong()));
+    }
+
+    private static ServoState resolveServoState(Minecraft minecraft, BlockPos blockPos, float partialTick) {
+        if (minecraft.level.getBlockEntity(blockPos) instanceof SpotlightBlockEntity spotlight) {
+            return spotlight.getInterpolatedServoState(partialTick);
+        }
+        return ServoState.defaults();
     }
 
     private static void drawDirectionLine(RenderLevelStageEvent event, LightTransform transform) {
