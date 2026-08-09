@@ -20,6 +20,11 @@ public final class StaticLightTransformResolver implements LightTransformResolve
                 facing.getStepY(),
                 facing.getStepZ()
         ).normalize();
+        return resolve(source.blockPos(), forward);
+    }
+
+    public LightTransform resolve(net.minecraft.core.BlockPos blockPos, Vec3 forward) {
+        forward = forward.normalize();
         Quaternionf rotation = new Quaternionf().rotationTo(
                 MODEL_FORWARD_X,
                 MODEL_FORWARD_Y,
@@ -29,6 +34,6 @@ public final class StaticLightTransformResolver implements LightTransformResolve
                 (float) forward.z
         );
 
-        return new LightTransform(Vec3.atCenterOf(source.blockPos()), rotation, forward);
+        return new LightTransform(Vec3.atCenterOf(blockPos), rotation, forward);
     }
 }

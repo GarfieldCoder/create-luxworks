@@ -211,6 +211,30 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
 }
 
+tasks.register('lightStateTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs the dependency-free LightState unit tests.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'io.github.garfieldcoder.luxworks.light.LightStateTest'
+}
+
+tasks.register('servoStateTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs the dependency-free ServoState unit tests.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'io.github.garfieldcoder.luxworks.servo.ServoStateTest'
+}
+
+tasks.named('test', Test).configure {
+    failOnNoDiscoveredTests = false
+}
+
+tasks.named('check').configure {
+    dependsOn lightStateTest, servoStateTest
+}
+
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
 idea {
     module {

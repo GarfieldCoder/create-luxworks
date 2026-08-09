@@ -29,7 +29,17 @@ public final class SableLightTransformResolver {
             Direction facing,
             float partialTick
     ) {
-        LightTransform localTransform = STATIC_RESOLVER.resolve(new StaticLightSource(blockPos, facing));
+        Vec3 localForward = new Vec3(facing.getStepX(), facing.getStepY(), facing.getStepZ());
+        return resolve(level, blockPos, localForward, partialTick);
+    }
+
+    public static LightTransform resolve(
+            ClientLevel level,
+            BlockPos blockPos,
+            Vec3 localForward,
+            float partialTick
+    ) {
+        LightTransform localTransform = STATIC_RESOLVER.resolve(blockPos, localForward);
         SubLevelAccess containing = SableCompanion.INSTANCE.getContaining(level, blockPos);
         if (!(containing instanceof ClientSubLevelAccess subLevel)) {
             return localTransform;

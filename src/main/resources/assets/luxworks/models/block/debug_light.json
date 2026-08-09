@@ -1,8 +1,33 @@
 {
-  "parent": "minecraft:block/orientable",
+  "parent": "minecraft:block/block",
   "textures": {
-    "front": "minecraft:block/sea_lantern",
-    "side": "minecraft:block/iron_block",
-    "top": "minecraft:block/smooth_stone"
-  }
+    "base": "minecraft:block/smooth_stone",
+    "particle": "minecraft:block/smooth_stone"
+  },
+  "elements": [
+    {
+      "from": [2, 0, 2],
+      "to": [14, 3, 14],
+      "faces": {
+        "down": { "texture": "#base", "cullface": "down" },
+        "up": { "texture": "#base" },
+        "north": { "texture": "#base" },
+        "south": { "texture": "#base" },
+        "west": { "texture": "#base" },
+        "east": { "texture": "#base" }
+      }
+    },
+    {
+      "from": [5, 3, 5],
+      "to": [11, 4, 11],
+      "faces": {
+        "down": { "texture": "#base" },
+        "up": { "texture": "#base" },
+        "north": { "texture": "#base" },
+        "south": { "texture": "#base" },
+        "west": { "texture": "#base" },
+        "east": { "texture": "#base" }
+      }
+    }
+  ]
 }

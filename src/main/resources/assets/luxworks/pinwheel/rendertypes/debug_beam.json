@@ -12,11 +12,15 @@
     },
     {
       "type": "minecraft:transparency",
-      "mode": "additive"
+      "mode": "translucent"
     },
     {
       "type": "minecraft:depth_test",
       "mode": "lequal"
+    },
+    {
+      "type": "minecraft:cull",
+      "face": "none"
     },
     {
       "type": "minecraft:write_mask",
