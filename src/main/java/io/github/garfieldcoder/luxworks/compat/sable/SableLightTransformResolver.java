@@ -1,0 +1,53 @@
+package io.github.garfieldcoder.luxworks.compat.sable;
+
+import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
+import dev.ryanhcode.sable.companion.math.Pose3dc;
+import dev.ryanhcode.sable.sublevel.ClientSubLevel;
+import dev.ryanhcode.sable.sublevel.plot.LevelPlot;
+import io.github.garfieldcoder.luxworks.light.LightTransform;
+import io.github.garfieldcoder.luxworks.light.StaticLightSource;
+import io.github.garfieldcoder.luxworks.light.StaticLightTransformResolver;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Quaternionf;
+
+/**
+ * Client-side Sable adapter. Dependency-specific types stay inside this
+ * package and the renderer receives only a neutral {@link LightTransform}.
+ */
+public final class SableLightTransformResolver {
+    private static final StaticLightTransformResolver STATIC_RESOLVER = new StaticLightTransformResolver();
+
+    private SableLightTransformResolver() {
+    }
+
+    public static LightTransform resolve(
+            ClientLevel level,
+            BlockPos blockPos,
+            Direction facing,
+            float partialTick
+    ) {
+        LightTransform localTransform = STATIC_RESOLVER.resolve(new StaticLightSource(blockPos, facing));
+        SubLevelContainer container = SubLevelContainer.getContainer(level);
+        if (container == null) {
+            return localTransform;
+        }
+
+        LevelPlot plot = container.getPlot(new ChunkPos(blockPos));
+        if (plot == null || !(plot.getSubLevel() instanceof ClientSubLevel subLevel)) {
+            return localTransform;
+        }
+
+        Pose3dc pose = subLevel.renderPose(partialTick);
+        Vec3 worldPosition = pose.transformPosition(localTransform.worldPosition());
+        Vec3 worldForward = pose.transformNormal(localTransform.forward()).normalize();
+        Quaternionf worldRotation = new Quaternionf(pose.orientation())
+                .mul(new Quaternionf(localTransform.worldRotation()))
+                .normalize();
+
+        return new LightTransform(worldPosition, worldRotation, worldForward);
+    }
+}

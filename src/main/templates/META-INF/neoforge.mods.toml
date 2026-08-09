@@ -89,6 +89,30 @@ Build volumetric spotlights, vehicle lights, stage rigs, optical sensors, and au
     ordering="NONE"
     side="BOTH"
 
+[[dependencies.${mod_id}]]
+    modId="create"
+    type="required"
+    reason="Create: Luxworks extends Create's industrial systems and visual language."
+    versionRange="[${create_version}]"
+    ordering="AFTER"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="sable"
+    type="required"
+    reason="Moving-light support is built around Sable sub-levels."
+    versionRange="[${sable_version}]"
+    ordering="AFTER"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="aeronautics"
+    type="required"
+    reason="Create: Aeronautics is the primary moving-contraption integration target."
+    versionRange="[${aeronautics_version}]"
+    ordering="AFTER"
+    side="BOTH"
+
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares
 # that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't
 # stop your mod loading on the server for example.
