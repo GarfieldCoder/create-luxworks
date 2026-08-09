@@ -140,10 +140,15 @@ dependencies {
     implementation "maven.modrinth:T9PomCSv:${sable_modrinth_version_id}"
     implementation "maven.modrinth:oWaK0Q19:${aeronautics_modrinth_version_id}"
     compileOnly "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
+    compileOnly "maven.modrinth:3KUWeVhG:${veil_modrinth_version_id}"
 
     // JEI is optional for players but present in development for recipe and
     // Create integration testing. Ponder itself is supplied by Create.
     localRuntime "maven.modrinth:u6dRKJwZ:${jei_modrinth_version_id}"
+
+    // Distant Horizons is optional for players. It is present in development
+    // so Phase 0 can verify coexistence before Luxworks adopts any DH API.
+    localRuntime "maven.modrinth:uCdwusMi:${distant_horizons_modrinth_version_id}"
 
     // Example mod dependency using a mod jar from ./libs with a flat dir repository
     // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
