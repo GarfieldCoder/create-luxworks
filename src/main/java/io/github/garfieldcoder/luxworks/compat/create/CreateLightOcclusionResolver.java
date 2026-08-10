@@ -31,8 +31,8 @@ public final class CreateLightOcclusionResolver {
                     || !contraption.isReadyForRender()) {
                 continue;
             }
-            Vec3 localStart = contraption.toLocalVector(start, partialTick);
-            Vec3 localEnd = contraption.toLocalVector(end, partialTick);
+            Vec3 localStart = CreateInterpolatedTransform.toLocalVector(contraption, start, partialTick);
+            Vec3 localEnd = CreateInterpolatedTransform.toLocalVector(contraption, end, partialTick);
             var localBounds = contraption.getContraption().bounds.inflate(0.01);
             if (!localBounds.contains(localStart) && localBounds.clip(localStart, localEnd).isEmpty()) {
                 continue;
@@ -47,7 +47,9 @@ public final class CreateLightOcclusionResolver {
                 if (localHit == null || localHit.getType() != HitResult.Type.BLOCK) {
                     continue;
                 }
-                Vec3 worldHit = contraption.toGlobalVector(localHit.getLocation(), partialTick);
+                Vec3 worldHit = CreateInterpolatedTransform.toGlobalVector(
+                        contraption, localHit.getLocation(), partialTick
+                );
                 double distance = start.distanceTo(worldHit);
                 if (distance < nearest) {
                     nearest = distance;

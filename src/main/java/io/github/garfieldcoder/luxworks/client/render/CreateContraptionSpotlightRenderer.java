@@ -5,6 +5,7 @@ import com.simibubi.create.content.contraptions.behaviour.MovementContext;
 import io.github.garfieldcoder.luxworks.Luxworks;
 import io.github.garfieldcoder.luxworks.compat.veil.VeilDebugBeamRenderer;
 import io.github.garfieldcoder.luxworks.compat.veil.VeilAreaLightManager;
+import io.github.garfieldcoder.luxworks.compat.create.CreateInterpolatedTransform;
 import io.github.garfieldcoder.luxworks.content.block.DebugLightBlock;
 import io.github.garfieldcoder.luxworks.content.blockentity.SpotlightBlockEntity;
 import io.github.garfieldcoder.luxworks.light.LightState;
@@ -99,9 +100,7 @@ public final class CreateContraptionSpotlightRenderer {
         );
         Vec3 worldForward = entity.applyRotation(localForward, partialTick).normalize();
         Vec3 localPosition = Vec3.atCenterOf(context.localPos);
-        Vec3 previousPosition = entity.toGlobalVector(localPosition, partialTick, true);
-        Vec3 currentPosition = entity.toGlobalVector(localPosition, partialTick, false);
-        Vec3 worldPosition = previousPosition.lerp(currentPosition, partialTick);
+        Vec3 worldPosition = CreateInterpolatedTransform.toGlobalVector(entity, localPosition, partialTick);
         if (ENABLE_EXPERIMENTAL_CREATE_SURFACE_LIGHT) {
             Quaternionf worldRotation = new Quaternionf().rotationTo(
                     0.0F,
@@ -119,7 +118,7 @@ public final class CreateContraptionSpotlightRenderer {
         } else {
             VeilAreaLightManager.remove(light.id());
         }
-        Vec3 rayStart = worldPosition.add(worldForward.scale(0.60));
+        Vec3 rayStart = worldPosition.add(worldForward.scale(BeamOcclusionSampler.START_OFFSET));
         double range = Math.min(light.range(), 64.0);
 
         CacheKey key = new CacheKey(entity.getUUID(), context.localPos.asLong());
@@ -171,6 +170,12 @@ public final class CreateContraptionSpotlightRenderer {
                 event.getCamera().getPosition(),
                 visibleProfile
         );
+        if (beamRendered) {
+            VeilDebugBeamRenderer.renderWorldSurface(
+                    event.getPoseStack(), light, worldPosition, worldForward,
+                    event.getCamera().getPosition(), visibleProfile
+            );
+        }
         LightRenderMetrics.record(
                 System.nanoTime() - startedAt,
                 beamRendered ? 1 : 0,

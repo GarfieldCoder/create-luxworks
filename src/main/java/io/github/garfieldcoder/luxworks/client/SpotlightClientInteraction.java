@@ -27,10 +27,18 @@ public final class SpotlightClientInteraction {
                 && event.getLevel().getBlockState(event.getPos()).is(LuxworksBlocks.DEBUG_LIGHT)
                 && event.getLevel().getBlockEntity(event.getPos()) instanceof SpotlightBlockEntity spotlight) {
             var servo = spotlight.getServoState();
+            var light = spotlight.getLightState();
             Minecraft.getInstance().setScreen(new SpotlightControlScreen(
                     event.getPos(),
                     servo.targetYaw(),
                     servo.targetPitch(),
+                    light.red(),
+                    light.green(),
+                    light.blue(),
+                    light.intensity(),
+                    light.range(),
+                    light.innerAngleDegrees(),
+                    light.outerAngleDegrees(),
                     spotlight.getSavedTarget()
             ));
             event.setCanceled(true);

@@ -84,6 +84,31 @@ public final class SpotlightBlockEntity extends BlockEntity {
         markChangedAndSync();
     }
 
+    public void setControls(
+            float yaw,
+            float pitch,
+            float red,
+            float green,
+            float blue,
+            float intensity,
+            float range,
+            float innerAngle,
+            float outerAngle
+    ) {
+        savedTarget = null;
+        servoState = servoState.withTarget(yaw, pitch);
+        lightState = new LightState(
+                lightState.id(),
+                lightState.enabled(),
+                LightState.rgbFromNormalized(red, green, blue),
+                intensity,
+                range,
+                innerAngle,
+                outerAngle
+        );
+        markChangedAndSync();
+    }
+
     public void setSavedTarget(BlockPos target) {
         savedTarget = target.immutable();
         updateServoTargetFromSavedTarget();

@@ -24,7 +24,11 @@ public record LightState(
     public static final float DEFAULT_RANGE = 16.0F;
     public static final float DEFAULT_INNER_ANGLE_DEGREES = 12.0F;
     public static final float DEFAULT_OUTER_ANGLE_DEGREES = 18.0F;
-    private static final float MAX_CONE_ANGLE_DEGREES = Math.nextDown(180.0F);
+    /**
+     * Phase 1's sparse diagnostic mesh becomes unstable for very wide cones.
+     * The production depth-aware renderer can lift this temporary restriction.
+     */
+    public static final float MAX_CONE_ANGLE_DEGREES = 45.0F;
 
     public LightState {
         id = Objects.requireNonNull(id, "id");
@@ -57,6 +61,18 @@ public record LightState(
 
     public float blue() {
         return (colorRgb & 0xFF) / 255.0F;
+    }
+
+    public static int rgbFromNormalized(float red, float green, float blue) {
+        int redByte = normalizedChannelToByte(red);
+        int greenByte = normalizedChannelToByte(green);
+        int blueByte = normalizedChannelToByte(blue);
+        return redByte << 16 | greenByte << 8 | blueByte;
+    }
+
+    private static int normalizedChannelToByte(float channel) {
+        float safeChannel = Float.isFinite(channel) ? Math.clamp(channel, 0.0F, 1.0F) : 0.0F;
+        return Math.round(safeChannel * 255.0F);
     }
 
     private static float nonNegativeFinite(float value) {

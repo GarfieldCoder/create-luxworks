@@ -126,6 +126,9 @@ public final class SpotlightBlockEntityRenderer implements BlockEntityRenderer<S
                 && lightState.intensity() > 0.0F
                 && lightState.range() > 0.0F
                 && VeilDebugBeamRenderer.renderLocal(poseStack, buffers, lightState, occlusion);
+        if (beamRendered) {
+            VeilDebugBeamRenderer.renderLocalSurface(poseStack, buffers, lightState, occlusion);
+        }
         poseStack.popPose();
 
         LightRenderMetrics.record(
