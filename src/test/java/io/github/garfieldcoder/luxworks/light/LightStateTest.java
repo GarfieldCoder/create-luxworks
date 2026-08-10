@@ -12,6 +12,20 @@ public final class LightStateTest {
         defaultsAreUsableAndStable();
         unsafeNumericValuesAreSanitized();
         colorChannelsAreNormalized();
+        normalizedChannelsPackIntoRgb();
+        coneAnglesStayWithinRenderableRange();
+    }
+
+    private static void normalizedChannelsPackIntoRgb() {
+        assertEquals(0xFF8000, LightState.rgbFromNormalized(1.0F, 0.5F, 0.0F));
+        assertEquals(0x00FFFF, LightState.rgbFromNormalized(-1.0F, 2.0F, 1.0F));
+    }
+
+    private static void coneAnglesStayWithinRenderableRange() {
+        LightState state = new LightState(ID, true, 0xFFFFFF, 1.0F, 16.0F, 140.0F, 170.0F);
+
+        assertEquals(45.0F, state.innerAngleDegrees());
+        assertEquals(45.0F, state.outerAngleDegrees());
     }
 
     private static void defaultsAreUsableAndStable() {

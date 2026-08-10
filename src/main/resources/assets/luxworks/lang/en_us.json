@@ -6,6 +6,17 @@
   "screen.luxworks.pitch": "Pitch",
   "screen.luxworks.apply": "Apply",
   "screen.luxworks.invalid_angle": "Enter valid numeric angles"
+  ,"screen.luxworks.invalid_controls": "Enter valid angles and RGB values from 0.0 to 1.0"
+  ,"screen.luxworks.red": "Red"
+  ,"screen.luxworks.green": "Green"
+  ,"screen.luxworks.blue": "Blue"
+  ,"screen.luxworks.color_limits": "RGB channels: 0.0 to 1.0"
+  ,"screen.luxworks.aim_section": "Aim and Cone"
+  ,"screen.luxworks.light_section": "Light Output"
+  ,"screen.luxworks.inner_angle": "Inner"
+  ,"screen.luxworks.outer_angle": "Outer"
+  ,"screen.luxworks.intensity": "Power"
+  ,"screen.luxworks.range": "Range"
   ,"item.luxworks.debug_targeting_stick": "Debug Targeting Stick"
   ,"message.luxworks.targeting_stick_bound": "Bound spotlight at %s"
   ,"message.luxworks.targeting_stick_unbound": "Click a spotlight first"

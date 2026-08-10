@@ -8,7 +8,7 @@ public final class LuxworksNetworking {
     }
 
     public static void register(RegisterPayloadHandlersEvent event) {
-        event.registrar("1")
+        event.registrar("2")
                 .playToServer(
                         SetServoTargetPayload.TYPE,
                         SetServoTargetPayload.STREAM_CODEC,

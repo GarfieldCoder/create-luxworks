@@ -7,14 +7,17 @@ import io.github.garfieldcoder.luxworks.servo.ServoDirectionResolver;
 import io.github.garfieldcoder.luxworks.servo.ServoState;
 import io.github.garfieldcoder.luxworks.compat.sable.SableLightRayResolver;
 import io.github.garfieldcoder.luxworks.compat.sable.SableLightOcclusionResolver;
+import io.github.garfieldcoder.luxworks.compat.sable.SableLightTransformResolver;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
 /** Coarse CPU light-space visibility sampler for the Phase 1 prototype. */
 public final class BeamOcclusionSampler {
     public static final int SEGMENTS = 16;
     public static final double[] RING_FRACTIONS = {0.0, 0.2, 0.5, 0.75, 1.0};
-    private static final double START_OFFSET = 0.60;
+    public static final double START_OFFSET = 0.60;
+    private static final double SOURCE_EXIT_EPSILON = 1.0E-4;
 
     private BeamOcclusionSampler() {
     }
@@ -55,13 +58,7 @@ public final class BeamOcclusionSampler {
                         spotlight.getBlockPos(),
                         forward
                 );
-                Vec3 end = start.add(direction.scale(range));
-                double hitDistance = SableLightOcclusionResolver.clipDistance(
-                        spotlight.getLevel(), start, end, Minecraft.getInstance().player
-                );
-                hitDistance = Math.min(hitDistance, CreateLightOcclusionResolver.clipDistance(
-                        spotlight.getLevel(), start, end, Minecraft.getInstance().player, partialTick
-                ));
+                double hitDistance = clipDistance(spotlight, start, direction, range, partialTick);
                 java.util.Arrays.fill(distances[ring], Math.max(0.0, hitDistance - 0.03));
                 continue;
             }
@@ -76,19 +73,7 @@ public final class BeamOcclusionSampler {
                         spotlight.getBlockPos(),
                         localDirection
                 );
-                double hitDistance = SableLightOcclusionResolver.clipDistance(
-                        spotlight.getLevel(),
-                        start,
-                        start.add(direction.scale(range)),
-                        Minecraft.getInstance().player
-                );
-                hitDistance = Math.min(hitDistance, CreateLightOcclusionResolver.clipDistance(
-                        spotlight.getLevel(),
-                        start,
-                        start.add(direction.scale(range)),
-                        Minecraft.getInstance().player,
-                        partialTick
-                ));
+                double hitDistance = clipDistance(spotlight, start, direction, range, partialTick);
                 distances[ring][segment] = Math.max(0.0, hitDistance - 0.03);
             }
         }
@@ -156,5 +141,66 @@ public final class BeamOcclusionSampler {
         for (double[] ring : distances) {
             java.util.Arrays.fill(ring, value);
         }
+    }
+
+    private static double clipDistance(
+            SpotlightBlockEntity spotlight,
+            Vec3 renderStart,
+            Vec3 direction,
+            double range,
+            float partialTick
+    ) {
+        Vec3 queryStart = renderStart;
+        if (!SableLightTransformResolver.isInSubLevel(spotlight.getLevel(), spotlight.getBlockPos())) {
+            queryStart = advancePastEmitterCell(spotlight.getBlockPos(), renderStart, direction);
+        }
+        double skippedDistance = renderStart.distanceTo(queryStart);
+        double queryRange = Math.max(0.0, range - skippedDistance);
+        Vec3 end = queryStart.add(direction.scale(queryRange));
+        double hitDistance = SableLightOcclusionResolver.clipDistance(
+                spotlight.getLevel(), queryStart, end, Minecraft.getInstance().player
+        );
+        hitDistance = Math.min(hitDistance, CreateLightOcclusionResolver.clipDistance(
+                spotlight.getLevel(), queryStart, end, Minecraft.getInstance().player, partialTick
+        ));
+        return Math.min(range, skippedDistance + hitDistance);
+    }
+
+    static Vec3 advancePastEmitterCell(BlockPos blockPos, Vec3 start, Vec3 direction) {
+        double minimumX = blockPos.getX();
+        double minimumY = blockPos.getY();
+        double minimumZ = blockPos.getZ();
+        double maximumX = minimumX + 1.0;
+        double maximumY = minimumY + 1.0;
+        double maximumZ = minimumZ + 1.0;
+        if (start.x < minimumX || start.x > maximumX
+                || start.y < minimumY || start.y > maximumY
+                || start.z < minimumZ || start.z > maximumZ) {
+            return start;
+        }
+
+        double exitX = distanceToBoundary(start.x, direction.x, minimumX, maximumX);
+        double exitY = distanceToBoundary(start.y, direction.y, minimumY, maximumY);
+        double exitZ = distanceToBoundary(start.z, direction.z, minimumZ, maximumZ);
+        double exitDistance = Math.min(exitX, Math.min(exitY, exitZ));
+        if (!Double.isFinite(exitDistance) || exitDistance < 0.0) {
+            return start;
+        }
+        return start.add(direction.scale(exitDistance + SOURCE_EXIT_EPSILON));
+    }
+
+    private static double distanceToBoundary(
+            double position,
+            double direction,
+            double minimum,
+            double maximum
+    ) {
+        if (direction > 1.0E-9) {
+            return (maximum - position) / direction;
+        }
+        if (direction < -1.0E-9) {
+            return (minimum - position) / direction;
+        }
+        return Double.POSITIVE_INFINITY;
     }
 }
