@@ -3,17 +3,21 @@ package io.github.garfieldcoder.luxworks.compat.veil;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import foundry.veil.api.client.render.rendertype.VeilRenderType;
+import foundry.veil.api.client.render.VeilRenderSystem;
+import foundry.veil.api.client.render.shader.program.ShaderProgram;
 import io.github.garfieldcoder.luxworks.Luxworks;
 import io.github.garfieldcoder.luxworks.light.LightTransform;
 import io.github.garfieldcoder.luxworks.light.LightState;
 import io.github.garfieldcoder.luxworks.light.AngularShadowMask;
 import io.github.garfieldcoder.luxworks.client.render.BeamOcclusionProfile;
 import io.github.garfieldcoder.luxworks.client.render.BeamOcclusionSampler;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4fc;
 
 /**
  * Phase 1 Veil volume driven by a coarse CPU angular occlusion mask. This is
@@ -25,10 +29,24 @@ public final class VeilDebugBeamRenderer {
             ResourceLocation.fromNamespaceAndPath(Luxworks.MOD_ID, "debug_beam");
     private static final ResourceLocation SURFACE_RENDER_TYPE_ID =
             ResourceLocation.fromNamespaceAndPath(Luxworks.MOD_ID, "surface_contact");
+    private static final ResourceLocation DEPTH_VOLUME_RENDER_TYPE_ID =
+            ResourceLocation.fromNamespaceAndPath(Luxworks.MOD_ID, "depth_volume");
+    private static final ResourceLocation DEPTH_VOLUME_SHADER_ID =
+            ResourceLocation.fromNamespaceAndPath(Luxworks.MOD_ID, "depth_volume");
     private static final int SEGMENTS = BeamOcclusionSampler.SEGMENTS;
     public static final int VERTEX_COUNT = SEGMENTS * 3
             + (BeamOcclusionSampler.RING_FRACTIONS.length - 1) * SEGMENTS * 6;
+    // The depth-volume proxy is only a bounding shape for an otherwise fully
+    // analytic per-pixel ray march, so its segment count is independent of
+    // (and can be much higher than) the CPU occlusion sampler's coarse
+    // BeamOcclusionSampler.SEGMENTS. At 16 segments, the proxy's flat
+    // triangular facets were visible as straight-edged artifacts wherever the
+    // true circular cross-section diverges most from the inscribed polygon,
+    // most noticeably staring down the beam axis at the end cap.
+    private static final int DEPTH_VOLUME_SEGMENTS = 48;
+    public static final int DEPTH_DIAGNOSTIC_VERTEX_COUNT = DEPTH_VOLUME_SEGMENTS * 6;
     private static final double MAX_PROTOTYPE_RANGE = 64.0;
+    private static boolean depthShaderTraced;
 
     private VeilDebugBeamRenderer() {
     }
@@ -155,6 +173,155 @@ public final class VeilDebugBeamRenderer {
                     addVertex(vertices, pose, innerB, lightState, innerAlpha);
                 }
             }
+        }
+        return true;
+    }
+
+    /**
+     * Stable +Z-facing cone used only to test camera-depth intersection.
+     * It deliberately ignores the CPU occlusion profile and surface pass.
+     */
+    public static boolean renderLocalDepthDiagnostic(
+            PoseStack poseStack,
+            MultiBufferSource buffers,
+            LightState lightState
+    ) {
+        RenderType renderType;
+        try {
+            renderType = VeilRenderType.get(RENDER_TYPE_ID);
+        } catch (RuntimeException exception) {
+            Luxworks.LOGGER.warn("Veil depth diagnostic render type is unavailable", exception);
+            return false;
+        }
+        if (renderType == null) {
+            return false;
+        }
+
+        double range = Math.min(lightState.range(), MAX_PROTOTYPE_RANGE);
+        double radius = Math.tan(Math.toRadians(lightState.outerAngleDegrees() * 0.5)) * range;
+        Vec3 start = new Vec3(0.0, 0.0, BeamOcclusionSampler.START_OFFSET);
+        double endZ = start.z + range;
+        VertexConsumer vertices = buffers.getBuffer(renderType);
+        PoseStack.Pose pose = poseStack.last();
+
+        for (int segment = 0; segment < SEGMENTS; segment++) {
+            double angleA = Math.PI * 2.0 * segment / SEGMENTS;
+            double angleB = Math.PI * 2.0 * (segment + 1) / SEGMENTS;
+            Vec3 edgeA = new Vec3(Math.cos(angleA) * radius, Math.sin(angleA) * radius, endZ);
+            Vec3 edgeB = new Vec3(Math.cos(angleB) * radius, Math.sin(angleB) * radius, endZ);
+            addDiagnosticVertex(vertices, pose, start, 112);
+            addDiagnosticVertex(vertices, pose, edgeA, 10);
+            addDiagnosticVertex(vertices, pose, edgeB, 10);
+        }
+        return true;
+    }
+
+    /**
+     * Draws a closed, stable cone whose shader integrates visible volume
+     * against a copied scene-depth texture. Geometry is never collision-warped.
+     */
+    public static boolean renderWorldSceneDepthVolume(
+            MultiBufferSource.BufferSource buffers,
+            LightTransform transform,
+            LightState lightState,
+            DeltaTracker deltaTracker
+    ) {
+        RenderType renderType;
+        try {
+            renderType = VeilRenderType.get(DEPTH_VOLUME_RENDER_TYPE_ID);
+        } catch (RuntimeException exception) {
+            Luxworks.LOGGER.warn("Veil depth-volume render type is unavailable", exception);
+            return false;
+        }
+        ShaderProgram shader = VeilRenderSystem.renderer().getShaderManager().getShader(DEPTH_VOLUME_SHADER_ID);
+        if (renderType == null || shader == null || !shader.isValid()) {
+            if (!depthShaderTraced) {
+                depthShaderTraced = true;
+                Luxworks.LOGGER.info(
+                        "Depth-volume trace: renderType={}, shaderPresent={}, shaderValid={}",
+                        renderType != null, shader != null, shader != null && shader.isValid()
+                );
+            }
+            return false;
+        }
+
+        double range = Math.min(lightState.range(), MAX_PROTOTYPE_RANGE);
+        double outerSlope = Math.tan(Math.toRadians(lightState.outerAngleDegrees() * 0.5));
+        double innerSlope = Math.tan(Math.toRadians(lightState.innerAngleDegrees() * 0.5));
+        double radius = outerSlope * range;
+        Vec3 forward = transform.forward();
+        Vec3 reference = Math.abs(forward.y) < 0.9
+                ? new Vec3(0.0, 1.0, 0.0)
+                : new Vec3(1.0, 0.0, 0.0);
+        Vec3 right = reference.cross(forward).normalize();
+        Vec3 up = forward.cross(right).normalize();
+        Vec3 lightOrigin = transform.worldPosition().add(forward.scale(0.34));
+        Vec3 start = lightOrigin.add(forward.scale(BeamOcclusionSampler.START_OFFSET));
+        Vec3 endCenter = start.add(forward.scale(range));
+
+        // Renders/reuses the cached light-space depth map before any cone
+        // geometry is queued: VeilLevelPerspectiveRenderer.render() flushes
+        // the whole buffer source at entry, which would otherwise submit a
+        // half-built or wrongly-shaded draw for this render type.
+        long gameTime = Minecraft.getInstance().level != null
+                ? Minecraft.getInstance().level.getGameTime()
+                : 0L;
+        Matrix4fc lightViewProjection = SpotlightShadowMap.ensure(
+                transform, lightState, range, deltaTracker, gameTime
+        );
+
+        VertexConsumer vertices = buffers.getBuffer(renderType);
+
+        for (int segment = 0; segment < DEPTH_VOLUME_SEGMENTS; segment++) {
+            double angleA = Math.PI * 2.0 * segment / DEPTH_VOLUME_SEGMENTS;
+            double angleB = Math.PI * 2.0 * (segment + 1) / DEPTH_VOLUME_SEGMENTS;
+            Vec3 edgeA = ringPoint(endCenter, right, up, angleA, radius);
+            Vec3 edgeB = ringPoint(endCenter, right, up, angleB, radius);
+
+            // Outward-facing side and end-cap triangles form a closed proxy.
+            addWorldPosition(vertices, edgeB);
+            addWorldPosition(vertices, edgeA);
+            addWorldPosition(vertices, start);
+            addWorldPosition(vertices, endCenter);
+            addWorldPosition(vertices, edgeA);
+            addWorldPosition(vertices, edgeB);
+        }
+
+        shader.bind();
+        shader.getUniformSafe("LightRange").setFloat((float) range);
+        shader.getUniformSafe("InnerSlope").setFloat((float) innerSlope);
+        shader.getUniformSafe("OuterSlope").setFloat((float) outerSlope);
+        shader.getUniformSafe("StartOffset").setFloat((float) BeamOcclusionSampler.START_OFFSET);
+        shader.getUniformSafe("LightColor").setVector(
+                lightState.red(), lightState.green(), lightState.blue()
+        );
+        shader.getUniformSafe("LightOrigin").setVector(
+                (float) start.x, (float) start.y, (float) start.z
+        );
+        shader.getUniformSafe("LightDirection").setVector(
+                (float) forward.x, (float) forward.y, (float) forward.z
+        );
+        shader.getUniformSafe("LightDensity").setFloat(
+                Math.clamp(lightState.intensity() * 0.055F, 0.01F, 0.35F)
+        );
+        // Real light-space shadow map replaces the voxel-grid occlusion
+        // source: the fragment shader compares each ray-march sample's
+        // light-space depth against this texture instead of walking Veil's
+        // coarse per-block occupancy grid, so cutout shapes (fences, leaves,
+        // glass panes) occlude correctly.
+        shader.getUniformSafe("LightViewProjection").setMatrix(lightViewProjection);
+        // Near/far of the light-space projection, so the fragment shader can
+        // linearize stored shadow depths and compare in world units.
+        shader.getUniformSafe("ShadowNearFar").setVector(
+                SpotlightShadowMap.nearPlane(), SpotlightShadowMap.farPlane()
+        );
+        buffers.endBatch(renderType);
+        if (!depthShaderTraced) {
+            depthShaderTraced = true;
+            Luxworks.LOGGER.info(
+                    "Depth-volume trace: shader draw submitted, vertices={}, range={}, radius={}",
+                    DEPTH_VOLUME_SEGMENTS * 6, range, radius
+            );
         }
         return true;
     }
@@ -478,6 +645,24 @@ public final class VeilDebugBeamRenderer {
         int alpha = Math.clamp(Math.round(baseAlpha * lightState.intensity()), 0, 180);
         vertices.addVertex(pose, (float) position.x, (float) position.y, (float) position.z)
                 .setColor(red, green, blue, alpha);
+    }
+
+    private static void addDiagnosticVertex(
+            VertexConsumer vertices,
+            PoseStack.Pose pose,
+            Vec3 position,
+            int alpha
+    ) {
+        vertices.addVertex(pose, (float) position.x, (float) position.y, (float) position.z)
+                .setColor(0, 255, 255, alpha);
+    }
+
+    private static void addPosition(VertexConsumer vertices, PoseStack.Pose pose, Vec3 position) {
+        vertices.addVertex(pose, (float) position.x, (float) position.y, (float) position.z);
+    }
+
+    private static void addWorldPosition(VertexConsumer vertices, Vec3 position) {
+        vertices.addVertex((float) position.x, (float) position.y, (float) position.z);
     }
 
     private static int contactAlpha(LightState lightState, double ringFraction) {

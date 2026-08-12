@@ -148,6 +148,9 @@ dependencies {
 
     // Distant Horizons is optional for players. It is present in development
     // so Phase 0 can verify coexistence before Luxworks adopts any DH API.
+    // compileOnly exposes the DH API for the shadow-pass render guard in
+    // compat/dh (classloaded only when DH is actually present at runtime).
+    compileOnly "maven.modrinth:uCdwusMi:${distant_horizons_modrinth_version_id}"
     localRuntime "maven.modrinth:uCdwusMi:${distant_horizons_modrinth_version_id}"
 
     // Example mod dependency using a mod jar from ./libs with a flat dir repository

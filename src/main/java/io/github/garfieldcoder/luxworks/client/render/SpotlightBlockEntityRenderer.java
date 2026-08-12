@@ -4,7 +4,9 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import io.github.garfieldcoder.luxworks.content.block.DebugLightBlock;
 import io.github.garfieldcoder.luxworks.content.blockentity.SpotlightBlockEntity;
+import io.github.garfieldcoder.luxworks.content.item.DebugTargetingStickItem;
 import io.github.garfieldcoder.luxworks.compat.veil.VeilDebugBeamRenderer;
+import io.github.garfieldcoder.luxworks.compat.veil.DepthAwareSpotlightRenderer;
 import io.github.garfieldcoder.luxworks.compat.create.CreateCompat;
 import io.github.garfieldcoder.luxworks.compat.sable.SableLightTransformResolver;
 import io.github.garfieldcoder.luxworks.compat.veil.VeilAreaLightManager;
@@ -16,6 +18,7 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.Direction;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -25,6 +28,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import io.github.garfieldcoder.luxworks.Luxworks;
 import io.github.garfieldcoder.luxworks.registry.LuxworksBlockEntities;
+import io.github.garfieldcoder.luxworks.light.LightTransform;
 import java.util.WeakHashMap;
 
 /**
@@ -82,22 +86,33 @@ public final class SpotlightBlockEntityRenderer implements BlockEntityRenderer<S
         Direction facing = spotlight.getBlockState().getValue(DebugLightBlock.FACING);
         var servo = spotlight.getInterpolatedServoState(partialTick);
         var lightState = spotlight.getLightState();
+        boolean depthDiagnostic = isDepthDiagnosticSelected(spotlight);
+        LightTransform resolvedTransform = null;
         if (spotlight.getLevel() instanceof ClientLevel clientLevel
                 && !CreateCompat.isVirtualContraptionLevel(clientLevel)
                 && lightState.enabled()
                 && lightState.intensity() > 0.0F) {
             var localForward = io.github.garfieldcoder.luxworks.servo.ServoDirectionResolver.resolve(facing, servo);
-            var transform = SableLightTransformResolver.resolve(
+            resolvedTransform = SableLightTransformResolver.resolve(
                     clientLevel,
                     spotlight.getBlockPos(),
                     localForward,
                     partialTick
             );
-            VeilAreaLightManager.update(transform, lightState, spotlight.getLevel().getGameTime());
+            // The depth-diagnostic beam now samples SpotlightShadowMap's real
+            // light-space depth render instead of Veil's voxel occlusion
+            // grid, so no camera-anchored keep-alive light is needed here
+            // anymore; both modes go through the same experimental,
+            // opt-in surface-light update.
+            VeilAreaLightManager.update(
+                    resolvedTransform, lightState, spotlight.getLevel().getGameTime()
+            );
         } else {
             VeilAreaLightManager.remove(lightState.id());
         }
-        BeamOcclusionProfile occlusion = resolveOcclusion(spotlight, servo, lightState.range(), lightState.outerAngleDegrees());
+        BeamOcclusionProfile occlusion = depthDiagnostic
+                ? null
+                : resolveOcclusion(spotlight, servo, lightState.range(), lightState.outerAngleDegrees());
 
         poseStack.pushPose();
         poseStack.translate(0.5, 0.25, 0.5);
@@ -121,12 +136,19 @@ public final class SpotlightBlockEntityRenderer implements BlockEntityRenderer<S
                 0.0F, 0.0F, -0.28F, 0.46F, 0.46F, 0.08F, packedLight);
         renderCuboid(poseStack, buffers, Blocks.SEA_LANTERN.defaultBlockState(),
                 0.0F, 0.0F, 0.34F, 0.34F, 0.34F, 0.06F, LightTexture.FULL_BRIGHT);
-        boolean beamRendered = !CreateCompat.isVirtualContraptionLevel(spotlight.getLevel())
+        boolean beamEligible = !CreateCompat.isVirtualContraptionLevel(spotlight.getLevel())
                 && lightState.enabled()
                 && lightState.intensity() > 0.0F
-                && lightState.range() > 0.0F
-                && VeilDebugBeamRenderer.renderLocal(poseStack, buffers, lightState, occlusion);
-        if (beamRendered) {
+                && lightState.range() > 0.0F;
+        boolean beamRendered;
+        if (beamEligible && depthDiagnostic && resolvedTransform != null) {
+            DepthAwareSpotlightRenderer.enqueue(resolvedTransform, lightState);
+            beamRendered = true;
+        } else {
+            beamRendered = beamEligible
+                    && VeilDebugBeamRenderer.renderLocal(poseStack, buffers, lightState, occlusion);
+        }
+        if (beamRendered && !depthDiagnostic) {
             VeilDebugBeamRenderer.renderLocalSurface(poseStack, buffers, lightState, occlusion);
         }
         poseStack.popPose();
@@ -134,8 +156,28 @@ public final class SpotlightBlockEntityRenderer implements BlockEntityRenderer<S
         LightRenderMetrics.record(
                 System.nanoTime() - startedAt,
                 beamRendered ? 1 : 0,
-                beamRendered ? VeilDebugBeamRenderer.VERTEX_COUNT : 0
+                beamRendered
+                        ? depthDiagnostic
+                        ? VeilDebugBeamRenderer.DEPTH_DIAGNOSTIC_VERTEX_COUNT
+                        : VeilDebugBeamRenderer.VERTEX_COUNT
+                        : 0
         );
+    }
+
+    private boolean isDepthDiagnosticSelected(SpotlightBlockEntity spotlight) {
+        // Persistent per-stick toggle (shift + right-click in air) rather
+        // than a held key: holding shift blocked screenshots and was easy
+        // to release accidentally while inspecting the beam.
+        if (minecraft.player == null) {
+            return false;
+        }
+        return isDiagnosticStick(minecraft.player.getMainHandItem(), spotlight)
+                || isDiagnosticStick(minecraft.player.getOffhandItem(), spotlight);
+    }
+
+    private static boolean isDiagnosticStick(ItemStack stack, SpotlightBlockEntity spotlight) {
+        return DebugTargetingStickItem.isBoundTo(stack, spotlight.getBlockPos())
+                && DebugTargetingStickItem.isDepthDiagnosticEnabled(stack);
     }
 
     private void renderCuboid(

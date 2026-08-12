@@ -22,10 +22,35 @@ import net.minecraft.world.phys.Vec3;
 /** Two-step development tool for binding a spotlight to a block target. */
 public final class DebugTargetingStickItem extends Item {
     private static final String BOUND_SPOTLIGHT_TAG = "bound_spotlight";
+    private static final String DEPTH_DIAGNOSTIC_TAG = "depth_diagnostic";
     private static final double TARGETING_RANGE = 256.0;
 
     public DebugTargetingStickItem(Properties properties) {
         super(properties);
+    }
+
+    public static boolean isBoundTo(ItemStack stack, BlockPos spotlightPos) {
+        if (!(stack.getItem() instanceof DebugTargetingStickItem)) {
+            return false;
+        }
+        CompoundTag itemData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+        return itemData.contains(BOUND_SPOTLIGHT_TAG)
+                && BlockPos.of(itemData.getLong(BOUND_SPOTLIGHT_TAG)).equals(spotlightPos);
+    }
+
+    /**
+     * Whether this stick has depth-diagnostic beam mode toggled on. Stored
+     * on the item (synced to the client automatically) so the renderer can
+     * poll it without requiring the player to hold a key, which blocked
+     * taking screenshots of the diagnostic beam.
+     */
+    public static boolean isDepthDiagnosticEnabled(ItemStack stack) {
+        if (!(stack.getItem() instanceof DebugTargetingStickItem)) {
+            return false;
+        }
+        return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY)
+                .copyTag()
+                .getBoolean(DEPTH_DIAGNOSTIC_TAG);
     }
 
     @Override
@@ -54,6 +79,21 @@ public final class DebugTargetingStickItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
+        if (player.isShiftKeyDown()) {
+            if (!level.isClientSide) {
+                boolean enabled = !isDepthDiagnosticEnabled(stack);
+                CustomData.update(DataComponents.CUSTOM_DATA, stack, tag ->
+                        tag.putBoolean(DEPTH_DIAGNOSTIC_TAG, enabled)
+                );
+                player.displayClientMessage(
+                        Component.translatable(enabled
+                                ? "message.luxworks.depth_diagnostic_on"
+                                : "message.luxworks.depth_diagnostic_off"),
+                        true
+                );
+            }
+            return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+        }
         Vec3 start = player.getEyePosition();
         Vec3 end = start.add(player.getViewVector(1.0F).scale(TARGETING_RANGE));
         BlockHitResult hit = level.clip(new ClipContext(

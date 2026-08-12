@@ -7,6 +7,7 @@ import io.github.garfieldcoder.luxworks.Luxworks;
  * render thread, not time spent executing the shader on the GPU.
  */
 public final class LightRenderMetrics {
+    private static final boolean ENABLED = Boolean.getBoolean("luxworks.debugBeamMetrics");
     private static final long REPORT_INTERVAL_NANOS = 5_000_000_000L;
 
     private static long reportStartedAt = System.nanoTime();
@@ -20,6 +21,9 @@ public final class LightRenderMetrics {
     }
 
     public static void record(long cpuNanos, int beamCount, int vertexCount) {
+        if (!ENABLED) {
+            return;
+        }
         sampledFrames++;
         submittedBeams += beamCount;
         submittedVertices += vertexCount;
