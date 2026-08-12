@@ -1,0 +1,14 @@
+{
+  "vertex": "luxworks:depth_volume",
+  "fragment": "luxworks:depth_volume",
+  "textures": {
+    "DepthSampler": {
+      "type": "framebuffer",
+      "name": "luxworks:spotlight_scene_depth:depth"
+    },
+    "ShadowMap": {
+      "type": "framebuffer",
+      "name": "luxworks:spotlight_shadow_map:depth"
+    }
+  }
+}

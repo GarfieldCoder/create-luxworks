@@ -27,4 +27,6 @@
   ,"screen.luxworks.angle_limits": "Yaw wraps at ±180°  •  Pitch clamps at ±90°"
   ,"screen.luxworks.saved_target": "Target: %s, %s, %s"
   ,"screen.luxworks.no_saved_target": "Target: none (manual angle mode)"
+  ,"message.luxworks.depth_diagnostic_on": "Depth-diagnostic beam: ON"
+  ,"message.luxworks.depth_diagnostic_off": "Depth-diagnostic beam: OFF"
 }

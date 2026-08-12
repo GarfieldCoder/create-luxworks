@@ -2,6 +2,7 @@ package io.github.garfieldcoder.luxworks.client.render;
 
 import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
 import com.simibubi.create.content.contraptions.behaviour.MovementContext;
+import foundry.veil.api.client.render.VeilLevelPerspectiveRenderer;
 import io.github.garfieldcoder.luxworks.Luxworks;
 import io.github.garfieldcoder.luxworks.compat.veil.VeilDebugBeamRenderer;
 import io.github.garfieldcoder.luxworks.compat.veil.VeilAreaLightManager;
@@ -47,6 +48,14 @@ public final class CreateContraptionSpotlightRenderer {
     @SubscribeEvent
     public static void render(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
+            return;
+        }
+        // This stage re-fires from a Veil perspective camera (e.g. the
+        // spotlight shadow-map pass in SpotlightShadowMap) while it renders
+        // the real world through LevelRenderer.renderLevel; skip that
+        // recursive firing so contraption beams are never duplicated or
+        // double-mutate the shared occlusion cache for one outer frame.
+        if (VeilLevelPerspectiveRenderer.isRenderingPerspective()) {
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();

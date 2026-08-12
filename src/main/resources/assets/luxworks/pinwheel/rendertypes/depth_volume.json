@@ -1,0 +1,31 @@
+{
+  "format": "POSITION",
+  "mode": "TRIANGLES",
+  "bufferSize": "TRANSIENT",
+  "sort": false,
+  "affectsCrumbling": false,
+  "outline": false,
+  "layers": [
+    {
+      "type": "veil:shader",
+      "name": "luxworks:depth_volume"
+    },
+    {
+      "type": "minecraft:transparency",
+      "mode": "additive"
+    },
+    {
+      "type": "minecraft:depth_test",
+      "mode": "always"
+    },
+    {
+      "type": "minecraft:cull",
+      "face": "front"
+    },
+    {
+      "type": "minecraft:write_mask",
+      "color": true,
+      "depth": false
+    }
+  ]
+}

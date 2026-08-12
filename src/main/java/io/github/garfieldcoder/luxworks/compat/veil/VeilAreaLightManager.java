@@ -42,8 +42,12 @@ public final class VeilAreaLightManager {
             remove(state.id());
             return;
         }
+        Snapshot snapshot = Snapshot.of(transform, state, Math.max(0.0F, state.intensity()), 32.0F);
+        updateInternal(state, gameTime, snapshot);
+    }
+
+    private static void updateInternal(LightState state, long gameTime, Snapshot snapshot) {
         Entry entry = LIGHTS.get(state.id());
-        Snapshot snapshot = Snapshot.of(transform, state);
         if (entry == null || !entry.handle.isValid()) {
             AreaLightData data = new AreaLightData();
             apply(data, snapshot);
@@ -97,7 +101,7 @@ public final class VeilAreaLightManager {
     private static void apply(AreaLightData data, Snapshot snapshot) {
         data.getPosition().set(snapshot.x, snapshot.y, snapshot.z);
         data.getOrientation().set(snapshot.orientation);
-        data.setSize(0.17, 0.17)
+        data.setSize(snapshot.size, snapshot.size)
                 .setAngle(snapshot.halfAngleRadians)
                 .setDistance(snapshot.range)
                 .setOcclusionEnabled(true)
@@ -120,12 +124,13 @@ public final class VeilAreaLightManager {
             Quaternionf orientation,
             float halfAngleRadians,
             float range,
+            float size,
             float red,
             float green,
             float blue,
             float brightness
     ) {
-        private static Snapshot of(LightTransform transform, LightState state) {
+        private static Snapshot of(LightTransform transform, LightState state, float brightness, float rangeCap) {
             var forward = transform.forward();
             var position = transform.worldPosition().add(forward.scale(0.40));
             Quaternionf orientation = new Quaternionf().rotationTo(
@@ -142,11 +147,12 @@ public final class VeilAreaLightManager {
                     position.z,
                     orientation,
                     (float) Math.toRadians(state.outerAngleDegrees() * 0.5),
-                    Math.min(state.range(), 32.0F),
+                    Math.min(state.range(), rangeCap),
+                    0.17F,
                     state.red(),
                     state.green(),
                     state.blue(),
-                    Math.max(0.0F, state.intensity())
+                    brightness
             );
         }
     }
